@@ -14,13 +14,14 @@ func main() {
 		log.Fatalln("OPen unknown error", err)
 	}
 
-	_, _, indices, err := ingest(f)
+	headers, _, indices, err := ingest(f)
 	if err != nil {
 		log.Fatalln("ingest unknown error", err)
 	}
 
-	for k, indexes := range indices[1] { // 0:Id, 1:MSSubClass
-		fmt.Printf("MSSubClass %s in row %v\n", k, indexes)
+	c := cardinality(indices)
+	for i, h := range headers {
+		fmt.Printf("%s: %v\n", h, c[i])
 	}
 }
 
@@ -52,4 +53,14 @@ func ingest(f io.Reader) ([]string, [][]string, []map[string][]int, error) {
 	}
 
 	return header, data, indices, nil
+}
+
+func cardinality(indices []map[string][]int) []int { // Count distinct values of columns.
+	result := make([]int, len(indices))
+
+	for i, m := range indices {
+		result[i] = len(m)
+	}
+
+	return result
 }
