@@ -1,22 +1,23 @@
+// https://github.com/PacktPublishing/Go-Machine-Learning-Projects/tree/master/Chapter02
 package main
 
 import (
 	"encoding/csv"
 	"fmt"
+	"gorgonia.org/tensor"
 	"io"
 	"log"
 	"os"
-	"sort"
 	"strconv"
 )
 
 func main() {
 	f, err := os.Open("data/train.csv")
 	if err != nil {
-		log.Fatalln("OPen unknown error", err)
+		log.Fatalln("Open unknown error", err)
 	}
 
-	headers, _, indices, err := ingest(f)
+	headers, data, indices, err := ingest(f)
 	if err != nil {
 		log.Fatalln("ingest unknown error", err)
 	}
@@ -25,6 +26,11 @@ func main() {
 	for i, h := range headers {
 		fmt.Printf("%s: %v\n", h, c[i])
 	}
+
+	rowLen, colLen, xsBack, ysBack, _, _ := clean(headers, data, indices, datahints, ignored)
+	xs := tensor.New(tensor.WithShape(rowLen, colLen), tensor.WithBacking(xsBack))
+	ys := tensor.New(tensor.WithShape(rowLen, 1), tensor.WithBacking(ysBack))
+	fmt.Printf("xs:\n%+1.1sys:\n%1.1s", xs, ys)
 }
 
 // Parse header and indices from raw data
@@ -84,7 +90,7 @@ func clean(headers []string, data [][]string, indices []map[string][]int, hints 
 
 			// Use column:SalePrice as Y value
 			if headers[j] == "SalePrice" {
-				y, _ := convert(raw, headers[j])
+				y, _ := convert(raw, false, headers[j], nil, "")
 				ys = append(ys, y...)
 
 				continue
@@ -94,16 +100,8 @@ func clean(headers []string, data [][]string, indices []map[string][]int, hints 
 				continue
 			}
 
-			// Convert raw string to []float64 and new columns
-			var x []float64
-			var xName []string
-			if hints[j] {
-				raw = imputeCategorical(raw, j, headers, modes)
+			x, xName := convert(raw, hints[j], headers[j], indices[j], modes[j]) // Convert raw string to []float64 and new columns
 
-				x, xName = convertCategorical(raw, indices[j], headers[j])
-			} else {
-				x, xName = convert(raw, headers[j])
-			}
 			xs = append(xs, x...)
 
 			// Extend hints and headers
@@ -132,25 +130,21 @@ func clean(headers []string, data [][]string, indices []map[string][]int, hints 
 	return rowLen, colLen, xs, ys, newHeaders, newHints
 }
 
-func inList(header string, ignored []string) bool {
-	for _, v := range ignored {
-		if header == v {
-			return true
-		}
+func convert(raw string, hint bool, header string, index map[string][]int, mode string) ([]float64, []string) {
+	if hint {
+		raw = imputeCategorical(raw, header, mode)
+
+		return convertCategorical(raw, header, index)
 	}
 
-	return false
-}
-
-// Convert string to []float64
-func convert(raw string, name string) ([]float64, []string) {
+	// Convert string to []float64
 	v, _ := strconv.ParseFloat(raw, 64)
 
-	return []float64{v}, []string{name}
+	return []float64{v}, []string{header}
 }
 
 // Convert categorical string to []float64
-func convertCategorical(raw string, index map[string][]int, name string) ([]float64, []string) {
+func convertCategorical(raw string, header string, index map[string][]int) ([]float64, []string) {
 	result := make([]float64, len(index)-1) // Modified one-hot method costs len-1 space.
 
 	// Get all categorical values
@@ -158,7 +152,7 @@ func convertCategorical(raw string, index map[string][]int, name string) ([]floa
 	for k := range index {
 		keys = append(keys, k) // keys is unsorted in map.
 	}
-	keys = sortKeys(keys) // keys is sorted.
+	keys = sortKeys(index, keys) // keys is sorted.
 
 	// Move NA to index 0 if exists.
 	naIndex := 0
@@ -180,31 +174,10 @@ func convertCategorical(raw string, index map[string][]int, name string) ([]floa
 
 	// Naming extended categorical values
 	for i, key := range keys {
-		keys[i] = fmt.Sprintf("%s_%s", name, key)
+		keys[i] = fmt.Sprintf("%s_%s", header, key)
 	}
 
 	return result, keys[1:]
-}
-
-// Sort categorical values by numeric or ASCII.
-func sortKeys(cols []string) []string {
-	result := make([]string, len(cols))
-	for i, v := range cols {
-		result[i] = v
-	}
-
-	sort.Slice(result, func(i, j int) bool {
-		u, err1 := strconv.ParseFloat(result[i], 64)
-		v, err2 := strconv.ParseFloat(result[j], 64)
-
-		if err1 == nil && err2 == nil {
-			return u < v // ascend
-		}
-
-		return result[i] < result[j] // ascend
-	})
-
-	return result
 }
 
 // Get most common categorical value by column
@@ -227,14 +200,14 @@ func mode(indices []map[string][]int) []string {
 }
 
 // Replace "NA" or empty value by default categorical value.
-func imputeCategorical(raw string, col int, headers []string, modes []string) string {
+func imputeCategorical(raw string, header string, mode string) string {
 	if raw != "NA" || raw != "" {
 		return raw
 	}
 
-	switch headers[col] {
+	switch header {
 	case "MSZoning", "BsmtFullBath", "BsmtHalfBath", "Utilities", "Functional", "Electrical", "KitchenQual", "SaleType", "Exterior1st", "Exterior2nd":
-		return modes[col]
+		return mode
 	}
 
 	return raw
