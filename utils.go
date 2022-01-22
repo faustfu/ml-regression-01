@@ -11,6 +11,21 @@ import (
 	"strconv"
 )
 
+// Plot histogram of values
+func plotHist(a []float64) (*plot.Plot, error) {
+	h, err := plotter.NewHist(plotter.Values(a), 10) // Separate values into 10 groups.
+	if err != nil {
+		return nil, err
+	}
+
+	p := plot.New()
+
+	h.Normalize(1) // Total probability of groups is 1.
+	p.Add(h)
+
+	return p, nil
+}
+
 // Plot CEF, use categorical values as x, CEF as y.
 func plotCEF(cef map[string]float64) (*plot.Plot, error) {
 	ordered := make([]string, 0, len(cef))

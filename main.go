@@ -43,6 +43,16 @@ func main() {
 	plt.Y.Label.Text = "EV of House Price"
 	err = plt.Save(25*vg.Centimeter, 25*vg.Centimeter, "CEF.png")
 	if err != nil {
-		log.Fatalln("plot Save unknown error", err)
+		log.Fatalln("CEF Save unknown error", err)
+	}
+
+	hist, err := plotHist(ysBack)
+	if err != nil {
+		log.Fatalln("plotHist unknown error", err)
+	}
+	hist.Title.Text = "Histogram of House Price"
+	err = hist.Save(25*vg.Centimeter, 25*vg.Centimeter, "hist.png")
+	if err != nil {
+		log.Fatalln("hist Save unknown error", err)
 	}
 }
